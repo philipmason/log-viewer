@@ -1,33 +1,89 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Box, Grid } from "@mui/material";
+import Select from "react-select";
+import {
+  Box,
+  Grid,
+  AppBar,
+  Toolbar,
+  Badge,
+  Tooltip,
+  IconButton,
+  FormControlLabel,
+  TextField,
+  Checkbox,
+  Button,
+  Switch,
+  CircularProgress,
+  LinearProgress,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Chip,
+  Menu,
+  MenuItem,
+  Snackbar,
+  DialogActions,
+  DialogContentText,
+  Autocomplete,
+  Typography,
+  Divider,
+} from "@mui/material";
+// import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import { DataGridPro } from "@mui/x-data-grid-pro";
 import { LicenseInfo } from "@mui/x-data-grid-pro";
 
 import { getDir, getVersions, xmlToJson } from "./utility";
 import { Fireworks } from "@fireworks-js/react";
+// import type { FireworksHandlers } from "@fireworks-js/react";
 
 import "./App.css";
+// rules are kept on LSAF in /general/biostat/tools/common/metadata/rules.json
 import defaultRules from "./rules.json";
 import requiredRules from "./required-rules.json";
-
-import AppToolbar from "./AppToolbar";
-import ProgressIndicators from "./ProgressIndicators";
-import LeftPanel from "./LeftPanel";
-import LogContentPanel from "./LogContentPanel";
-import ChartDialog from "./ChartDialog";
-import RulesDialog from "./RulesDialog";
-import InfoDialog from "./InfoDialog";
+import {
+  Add,
+  Remove,
+  RestartAlt,
+  Download,
+  ArrowCircleLeft,
+  ArrowCircleRight,
+  SquareFoot,
+  FileDownloadDone,
+  BarChart,
+  Close,
+  Compress,
+  Expand,
+  ZoomIn,
+  ZoomOut,
+  Colorize,
+  Visibility,
+  Publish,
+  Refresh,
+  Info,
+  Email,
+  ContentPaste,
+  KeyboardDoubleArrowUp,
+  KeyboardDoubleArrowDown,
+} from "@mui/icons-material";
+// import { Routes, Route, useNavigate } from "react-router-dom";
+// import Mermaid from "react-mermaid";
+import Mermaid from "./Mermaid";
 
 LicenseInfo.setLicenseKey(
   "a223b56d60901267734e67150910e406Tz0xMTU2MDYsRT0xNzg0ODUxMTk5MDAwLFM9cHJvLExNPXN1YnNjcmlwdGlvbixQVj1pbml0aWFsLEtWPTI="
 );
 
-
 function App() {
   const ref = useRef(null),
+    fgColor = "#ffffff",
+    rowHeight = 22,
+    increment = 0.25,
     [chart, setChart] = useState(`flowchart TD
     Start --> Stop`),
     [openModal, setOpenModal] = useState(false),
-    verticalSplit = 3,
+    [verticalSplit, setVerticalSplit] = useState(3),
     urlPrefix = window.location.protocol + "//" + window.location.host,
     filePrefix = "/lsaf/filedownload/sdd%3A//",
     webDavPrefix = urlPrefix + "/lsaf/webdav/repo",
@@ -37,6 +93,7 @@ function App() {
     [dirListing, setDirListing] = useState(null),
     logRef = useRef(null),
     // localFileRef = createRef(),
+    iconPadding = 0.25,
     [openInfo, setOpenInfo] = useState(false),
     [direction, setDirection] = useState(false),
     // [showFileSelector, setShowFileSelector] = useState(false),
@@ -54,6 +111,7 @@ function App() {
       setOpenRulesModal(false);
     },
     [lineVar, setLineVar] = useState("obs"),
+    lineVarOptions = ["real", "obs"],
     [localUrl, setLocalUrl] = useState(null),
     [scale, setScale] = useState(1),
     [mermaidInfo, setMermaidInfo] = useState({ characters: null, lines: null }),
@@ -173,6 +231,28 @@ function App() {
         counts[type] = 0;
       });
       counts = {};
+    },
+    selectStyles = {
+      control: (baseStyles, state) => ({
+        ...baseStyles,
+        fontSize: "12px",
+        marginLeft: 3,
+        background: "#c5e1c5",
+        border: state.isFocused ? "1px solid #0000ff" : "2px solid #00ffff",
+        // borderColor: state.isFocused ? "green" : "red",
+        // "&:hover": {
+        //   border: "1px solid #ff8b67",
+        //   boxShadow: "0px 0px 6px #ff8b67",
+        // },
+      }),
+      option: (baseStyles, state) => ({
+        ...baseStyles,
+        fontSize: "12px",
+      }),
+      // container: (baseStyles, state) => ({
+      //   ...baseStyles,
+      //   border: "2px solid #ff8b67",
+      // }),
     },
     [popUpMessage, setPopUpMessage] = useState(null),
     [openPopUp, setOpenPopUp] = useState(false),
@@ -531,14 +611,105 @@ function App() {
       await getVersions(webDavPrefix + dir, processRulesXml);
       setWaitGetDir(false);
     },
+    ColDefnRules = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "type", headerName: "type", width: 80 },
+      { field: "ruleType", headerName: "ruleType", width: 80 },
+      { field: "startswith", headerName: "startswith", width: 100 },
+      { field: "regex", headerName: "regex", width: 400 },
+      { field: "prefix", headerName: "prefix", width: 400 },
+      { field: "suffix", headerName: "suffix", width: 90 },
+      { field: "anchor", headerName: "anchor", width: 50 },
+      { field: "linkColor", headerName: "linkColor", width: 50 },
+      { field: "interesting", headerName: "interesting", width: 50 },
+      { field: "substitute", headerName: "substitute", width: 50 },
+    ],
+    ColDefnOutputs = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "lineNumber", headerName: "Line", width: 90 },
+      { field: "link", headerName: "link", width: 90, hide: true },
+      { field: "libname", headerName: "Libname", width: 90 },
+      { field: "dataset", headerName: "dataset", width: 180 },
+      { field: "obs", headerName: "# obs", width: 90 },
+      { field: "vars", headerName: "# variables", width: 90 },
+    ],
     [outputs, setOutputs] = useState(null),
+    ColDefnInputs = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "lineNumber", headerName: "Line", width: 90 },
+      { field: "link", headerName: "link", width: 90, hide: true },
+      { field: "libname", headerName: "Libname", width: 90 },
+      { field: "dataset", headerName: "dataset", width: 180 },
+      { field: "obs", headerName: "# obs", width: 90 },
+    ],
     [inputs, setInputs] = useState(null),
+    ColDefnFiles = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "lineNumber", headerName: "Line", width: 90 },
+      { field: "link", headerName: "link", width: 90, hide: true },
+      { field: "file", headerName: "File", width: 240, flex: 1 },
+      { field: "size", headerName: "Size", width: 120 },
+    ],
     [files, setFiles] = useState(null),
+    ColDefnRealTime = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "lineNumber", headerName: "Line", width: 90 },
+      { field: "link", headerName: "link", width: 90, hide: true },
+      { field: "time", headerName: "Time", width: 90 },
+      { field: "units", headerName: "Units", width: 90 },
+      {
+        field: "seconds",
+        headerName: "Seconds",
+        width: 90,
+        valueFormatter: (params) => {
+          if (params.value == null) {
+            return "";
+          }
+          const valueFormatted = Number(params.value).toLocaleString();
+          return `${valueFormatted}`;
+        },
+      },
+    ],
     [searchField, setSearchField] = useState(null),
     [realTime, setRealTime] = useState(null),
+    ColDefnCpuTime = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "lineNumber", headerName: "Line", width: 90 },
+      { field: "link", headerName: "link", width: 90, hide: true },
+      { field: "time", headerName: "Time", width: 90 },
+      { field: "units", headerName: "Units", width: 90 },
+      {
+        field: "seconds",
+        headerName: "Seconds",
+        width: 90,
+        valueFormatter: (params) => {
+          if (params.value == null) {
+            return "";
+          }
+          const valueFormatted = Number(params.value).toLocaleString();
+          return `${valueFormatted}`;
+        },
+      },
+    ],
     [cpuTime, setCpuTime] = useState(null),
+    ColDefnMprint = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "show", headerName: "Show", width: 50, hide: true },
+      { field: "name", headerName: "Macro name", width: 400, flex: 1 },
+      { field: "lines", headerName: "Lines", width: 50 },
+    ],
     [mprint, setMprint] = useState(null),
+    ColDefnMlogic = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "name", headerName: "Macro name", width: 400, flex: 1 },
+      { field: "lines", headerName: "Lines", width: 50 },
+    ],
     [mlogic, setMlogic] = useState(null),
+    ColDefnSymbolgen = [
+      { field: "id", headerName: "ID", width: 90, hide: true },
+      { field: "name", headerName: "Macro variable name", width: 400, flex: 1 },
+      { field: "lines", headerName: "Lines", width: 50 },
+    ],
     [symbolgen, setSymbolgen] = useState(null),
     [selectionModel, setSelectionModel] = React.useState([]),
     processLogXml = (responseXML) => {
@@ -1206,13 +1377,6 @@ function App() {
         }
         setProcessingProgress(80);
         setLogText(analyse(textToProcess));
-        // Update browser tab title with error/warning/serious counts
-        const e = counts["ERROR"] || 0,
-          w = counts["WARN"] || 0,
-          s = counts["SERIOUS"] || 0,
-          baseTitle = document.title.replace(/\s*\([\d,]+\)\s*$/, "");
-        if (e + w + s > 0) document.title = `${baseTitle} (${e},${w},${s})`;
-        else document.title = baseTitle;
         setProcessingProgress(100);
         const minVisibleMs = 700,
           elapsed = Date.now() - processingStartedAtRef.current,
@@ -1264,13 +1428,6 @@ function App() {
     processLogWithProgress(logOriginalText, false);
     // eslint-disable-next-line
   }, [showLineNumbers]);
-
-  // re-generate chart when direction or line variable changes
-  useEffect(() => {
-    if (!logOriginalText) return;
-    analyseLog();
-    // eslint-disable-next-line
-  }, [direction, lineVar]);
 
   useEffect(() => {
     console.log("*** href", href);
@@ -1497,97 +1654,1371 @@ function App() {
 
   return (
     <Box>
-      <AppToolbar
-        leftPanelWidth={leftPanelWidth} setLeftPanelWidth={setLeftPanelWidth}
-        rightPanelWidth={rightPanelWidth} setRightPanelWidth={setRightPanelWidth}
-        fontSize={fontSize} setFontSize={setFontSize}
-        selection={selection}
-        showSource={showSource} setShowSource={setShowSource}
-        showMacroLines={showMacroLines} setshowMacroLines={setshowMacroLines}
-        showLineNumbers={showLineNumbers} setshowLineNumbers={setshowLineNumbers}
-        setAnalyseAgain={setAnalyseAgain}
-        setOpenModal={setOpenModal} setOpenRulesModal={setOpenRulesModal}
-        extractSasCode={extractSasCode} pasteClipboard={pasteClipboard}
-        href={href}
-        logRef={logRef}
-        links={links} currentLine={currentLine} setCurrentLine={setCurrentLine} jumpTo={jumpTo}
-        search={search} setSearch={setSearch} searchField={searchField} setSearchField={setSearchField}
-        nextSearchItem={nextSearchItem} previousSearchTerm={previousSearchTerm}
-        setOpenInfo={setOpenInfo}
-        openPopUp={openPopUp} setOpenPopUp={setOpenPopUp} popUpMessage={popUpMessage}
-        openRulesMenu={openRulesMenu} setOpenRulesMenu={setOpenRulesMenu}
-        anchorEl={anchorEl} setAnchorEl={setAnchorEl} handleCloseRulesMenu={handleCloseRulesMenu}
-        listOfRules={listOfRules}
-        openInNewTab={openInNewTab}
-      />
-      <ProgressIndicators
-        isFetchingFile={isFetchingFile}
-        isProcessingLog={isProcessingLog}
-        processingProgress={processingProgress}
-      />
+      <AppBar
+        position="static"
+        elevation={3}
+        sx={{
+          background: "linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #0277bd 100%)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+        }}
+      >
+        <Toolbar variant="dense" disableGutters sx={{ px: 0.5 }}>
+          <Tooltip title="Move center to the left">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                // setLeftPanelWidth(2);
+                // setRightPanelWidth(10);
+                setLeftPanelWidth(Math.max(leftPanelWidth - 3, 0));
+                setRightPanelWidth(Math.min(rightPanelWidth + 3, 12));
+              }}
+            >
+              <ArrowCircleLeft />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Reset to middle">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                setLeftPanelWidth(6);
+                setRightPanelWidth(6);
+              }}
+            >
+              <RestartAlt />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Move center to the right">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                // setLeftPanelWidth(10);
+                // setRightPanelWidth(2);
+                setLeftPanelWidth(Math.min(leftPanelWidth + 3, 12));
+                setRightPanelWidth(Math.max(rightPanelWidth - 3, 0));
+              }}
+            >
+              <ArrowCircleRight />
+            </IconButton>
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Tooltip title="Smaller">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                setFontSize(fontSize - 1);
+              }}
+            >
+              <Remove />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Reset to 12">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                setFontSize(12);
+              }}
+            >
+              <RestartAlt />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Larger">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                setFontSize(fontSize + 1);
+              }}
+            >
+              <Add />
+            </IconButton>
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Tooltip title="Download SAS Log">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                openInNewTab(`${selection}`);
+              }}
+            >
+              <Download />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Show Source Lines">
+            <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Src</Typography>}
+              sx={{
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
+                mr: iconPadding,
+                ml: iconPadding,
+                m: 0.25,
+              }}
+              control={
+                <Switch
+                  checked={showSource}
+                  onChange={() => {
+                    setShowSource(!showSource);
+                    setAnalyseAgain((prev) => !prev);
+                  }}
+                  name="source"
+                  size="small"
+                  color="warning"
+                />
+              }
+            />
+          </Tooltip>
+          <Tooltip title="Show Mprint/Mlogic/Symbolgen/Mautocomploc Lines">
+            <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Mac</Typography>}
+              sx={{
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
+                mr: iconPadding,
+                ml: iconPadding,
+                m: 0.25,
+              }}
+              control={
+                <Switch
+                  checked={showMacroLines}
+                  onChange={() => {
+                    setshowMacroLines(!showMacroLines);
+                    setAnalyseAgain((prev) => !prev);
+                  }}
+                  name="mprint"
+                  size="small"
+                  color="warning"
+                  sx={{ ml: 0.5 }}
+                />
+              }
+            />
+          </Tooltip>
+          <Tooltip title="Show Line numbers">
+            <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Ln#</Typography>}
+              sx={{
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
+                mr: iconPadding,
+                ml: iconPadding,
+                m: 0.25,
+              }}
+              control={
+                <Switch
+                  checked={showLineNumbers}
+                  onChange={() => {
+                    setshowLineNumbers(!showLineNumbers);
+                  }}
+                  name="mprint"
+                  size="small"
+                  color="warning"
+                  sx={{ ml: 0.5, mr: 0.5 }}
+                />
+              }
+            />
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Tooltip title="Show Chart">
+            <IconButton
+              size="small"
+              onClick={() => setOpenModal(true)}
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+                ml: iconPadding,
+              }}
+            >
+              <BarChart />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Choose rules used to parse logs">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={(e) => {
+                setAnchorEl(e.currentTarget);
+                setOpenRulesMenu(true);
+              }}
+            >
+              <SquareFoot />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="View rules">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={(e) => {
+                setOpenRulesModal(true);
+              }}
+            >
+              <Visibility />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Extract SAS code (if possible)">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={(e) => {
+                extractSasCode();
+              }}
+            >
+              <Colorize />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Paste Clipboard as new contents of Log">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={(e) => {
+                pasteClipboard();
+              }}
+            >
+              <ContentPaste />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Email">
+            <IconButton
+              onClick={() => {
+                const email =
+                  "mailto:qs_tech_prog@argenx.com?subject=Log Viewer: " +
+                  selection +
+                  "&body=You can open the log in the Log Viewer using this link: " +
+                  encodeURIComponent(href);
+                console.log("email", email);
+                window.open(email, "_blank");
+              }}
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+            >
+              <Email />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Refresh view by analysing the log again">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={(e) => {
+                setAnalyseAgain((prev) => !prev);
+              }}
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Snackbar
+            open={openPopUp}
+            onClose={() => setOpenPopUp(false)}
+            autoHideDuration={3000}
+            message={popUpMessage}
+          />
+          <Menu
+            open={openRulesMenu}
+            onClose={handleCloseRulesMenu}
+            anchorEl={anchorEl}
+          >
+            {listOfRules &&
+              listOfRules.length > 0 &&
+              listOfRules.map((rule, id) => (
+                <MenuItem
+                  key={id}
+                  onClick={(e) => handleCloseRulesMenu(rule.value)}
+                >
+                  {rule.label}
+                </MenuItem>
+              ))}
+          </Menu>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Tooltip title={`Compress by ${increment}`}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setVerticalSplit(verticalSplit + increment);
+              }}
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+            >
+              <Compress />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={`Expand by ${increment}`}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setVerticalSplit(verticalSplit - increment);
+              }}
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+            >
+              <Expand />
+            </IconButton>
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <Tooltip title="Page Down">
+            <IconButton
+              size="small"
+              // color="secondary"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                const clientHeight = logRef.current.clientHeight;
+                logRef.current.scrollBy(0, clientHeight - 20);
+              }}
+            >
+              <KeyboardDoubleArrowDown />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Page Up">
+            <IconButton
+              size="small"
+              sx={{
+                color: fgColor,
+                // backgroundColor: bgColor,
+                borderRadius: 3,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                const clientHeight = logRef.current.clientHeight;
+                logRef.current.scrollBy(0, -(clientHeight - 10));
+              }}
+            >
+              <KeyboardDoubleArrowUp />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Next Interesting thing">
+            <IconButton
+              size="small"
+              onClick={() => {
+                const interesting = links.filter(
+                  (link) => link.interesting && link.lineNumber > currentLine
+                );
+                if (interesting.length > 0) {
+                  jumpTo(interesting[0].id);
+                  setCurrentLine(interesting[0].lineNumber);
+                }
+              }}
+              sx={{
+                borderRadius: 3,
+                color: "yellow",
+                // backgroundColor: bgColor2,
+
+                mr: iconPadding,
+              }}
+            >
+              <KeyboardDoubleArrowDown />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Previous Interesting thing">
+            <IconButton
+              size="small"
+              sx={{
+                borderRadius: 3,
+                color: "yellow",
+                // backgroundColor: bgColor2,
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                const interesting = links.filter(
+                  (link) => link.interesting && link.lineNumber < currentLine
+                );
+                if (interesting.length > 0) {
+                  const last = interesting.pop();
+                  jumpTo(last.id);
+                  setCurrentLine(last.lineNumber);
+                }
+              }}
+            >
+              <KeyboardDoubleArrowUp />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Next Error">
+            <IconButton
+              size="small"
+              sx={{
+                borderRadius: 3,
+                // backgroundColor: "lightblue",
+                color: "#fc4514",
+                mr: iconPadding,
+              }}
+              // color="error"
+              onClick={() => {
+                const errors = links.filter(
+                  (link) =>
+                    link.type === "ERROR" && link.lineNumber > currentLine
+                );
+                if (errors.length > 0) {
+                  jumpTo(errors[0].id);
+                  setCurrentLine(errors[0].lineNumber);
+                }
+              }}
+            >
+              <KeyboardDoubleArrowDown />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Previous Error">
+            <IconButton
+              size="small"
+              sx={{
+                borderRadius: 3,
+                color: "#fc4514",
+                mr: iconPadding,
+              }}
+              // color="error"
+              onClick={() => {
+                const errors = links.filter(
+                  (link) =>
+                    link.type === "ERROR" && link.lineNumber < currentLine
+                );
+                if (errors.length > 0) {
+                  const last = errors.pop();
+                  jumpTo(last.id);
+                  setCurrentLine(last.lineNumber);
+                }
+              }}
+            >
+              <KeyboardDoubleArrowUp />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Next Warning">
+            <IconButton
+              size="small"
+              // color="warning"
+              sx={{
+                borderRadius: 3,
+                color: "#FFC300",
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                const warnings = links.filter(
+                  (link) =>
+                    link.type === "WARN" && link.lineNumber > currentLine
+                );
+                if (warnings.length > 0) {
+                  jumpTo(warnings[0].id);
+                  setCurrentLine(warnings[0].lineNumber);
+                }
+              }}
+            >
+              <KeyboardDoubleArrowDown />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Previous Warning">
+            <IconButton
+              size="small"
+              // color="warning"
+              sx={{
+                borderRadius: 3,
+                color: "#FFC300",
+                mr: iconPadding,
+              }}
+              onClick={() => {
+                const warnings = links.filter(
+                  (link) =>
+                    link.type === "WARN" && link.lineNumber < currentLine
+                );
+                if (warnings.length > 0) {
+                  const last = warnings.pop();
+                  jumpTo(last.id);
+                  setCurrentLine(last.lineNumber);
+                }
+              }}
+            >
+              <KeyboardDoubleArrowUp />
+            </IconButton>
+          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
+          <TextField
+            label="Search (case-sensitive)"
+            value={search}
+            size={"small"}
+            inputProps={{ style: { fontSize: 12, height: "1.1em", color: "#1a1a2e" } }}
+            InputLabelProps={{ style: { fontSize: 11, color: "#555" } }}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+            inputRef={(input) => input && setSearchField(input)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                // console.log("Input value", e.target.value);
+                e.preventDefault();
+                nextSearchItem();
+                setTimeout(() => {
+                  searchField.focus();
+                }, 100);
+              }
+            }}
+            sx={{
+              flexGrow: 1,
+              mt: 0.6,
+              mr: 1,
+              ml: 1,
+              mb: 0.5,
+              backgroundColor: "rgba(255,255,255,0.92)",
+              borderRadius: 1,
+              "& .MuiOutlinedInput-root": {
+                "& fieldset": { borderColor: "rgba(255,255,255,0.4)" },
+                "&:hover fieldset": { borderColor: "#fff" },
+              },
+            }}
+          />
+          <Tooltip title="Next search term">
+            <IconButton
+              size="small"
+              color="secondary"
+              sx={{
+                borderRadius: 3,
+                // backgroundColor: "#e0ccff",
+                mr: iconPadding,
+              }}
+              onClick={nextSearchItem}
+            >
+              <KeyboardDoubleArrowDown />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Previous search term">
+            <IconButton
+              size="small"
+              color="secondary"
+              sx={{
+                borderRadius: 3,
+                // backgroundColor: "#e0ccff",
+                mr: iconPadding,
+              }}
+              onClick={previousSearchTerm}
+            >
+              <KeyboardDoubleArrowUp />
+            </IconButton>
+          </Tooltip>{" "}
+          <Tooltip title="Information about this screen">
+            <IconButton
+              size="small"
+              // aria-label="account of current user"
+              // aria-controls="menu-appbar"
+              // aria-haspopup="true"
+              onClick={() => {
+                setOpenInfo(true);
+              }}
+              sx={{
+                borderRadius: 3,
+                // backgroundColor: "#0000ff",
+                color: "white",
+                mr: iconPadding,
+              }}
+            >
+              <Info />
+            </IconButton>
+          </Tooltip>
+        </Toolbar>
+      </AppBar>
+      {isFetchingFile ? (
+        <Box sx={{ px: 1, pt: 0.5, bgcolor: "#fff3e0" }}>
+          <Typography sx={{ fontSize: 12, color: "#bf360c", mb: 0.25 }}>
+            Loading file...
+          </Typography>
+          <LinearProgress variant="indeterminate" color="warning" />
+        </Box>
+      ) : null}
+      {isProcessingLog ? (
+        <Box sx={{ px: 1, pt: 0.5, bgcolor: "#f6f7fb" }}>
+          <Typography sx={{ fontSize: 12, color: "#1a237e", mb: 0.25 }}>
+            Processing log... {Math.round(processingProgress)}%
+          </Typography>
+          <LinearProgress variant="determinate" value={processingProgress} />
+        </Box>
+      ) : null}
       {ref?.current?.isRunning && (
         <Fireworks
           ref={ref}
           options={{ opacity: 0.5 }}
-          style={{ top: 0, left: 0, width: "100%", height: "100%", position: "fixed" }}
+          style={{
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            position: "fixed",
+            // background: "#000",
+          }}
         />
       )}
       <Grid container spacing={1}>
-        <LeftPanel
-          leftPanelWidth={leftPanelWidth} rightPanelWidth={rightPanelWidth}
-          windowDimension={windowDimension}
-          logDirectory={logDirectory} setLogDirectory={setLogDirectory}
-          mode={mode} readLocalFiles={readLocalFiles} setLogText={setLogText}
-          setWaitGetDir={setWaitGetDir} getLogWebDav={getLogWebDav}
-          processDirectory={processDirectory} waitGetDir={waitGetDir} waitSelectLog={waitSelectLog}
-          listOfLogs={listOfLogs} selectedLog={selectedLog} selectLog={selectLog}
-          selection={selection} setSelection={setSelection}
-          handleNewLog={handleNewLog} getLogVersions={getLogVersions}
-          program={program} submitted={submitted} submitEnd={submitEnd} nLines={nLines}
-          uniqueTypes={uniqueTypes} badgeCount={badgeCount} check={check} changeCheck={changeCheck}
-          links={links} showLineNumbers={showLineNumbers} zeroPad={zeroPad} logRef={logRef}
-          fontSize={fontSize} verticalSplit={verticalSplit}
-          tabValue={tabValue} changeTabValue={changeTabValue}
-          outputs={outputs} inputs={inputs} files={files}
-          realTime={realTime} cpuTime={cpuTime}
-          mprint={mprint} mlogic={mlogic} symbolgen={symbolgen}
-          selectionModel={selectionModel} setSelectionModel={setSelectionModel}
-        />
-        <LogContentPanel
-          rightPanelWidth={rightPanelWidth}
-          dirListing={dirListing}
-          logText={logText}
-          fontSize={fontSize}
-          windowDimension={windowDimension}
-          verticalSplit={verticalSplit}
-          logRef={logRef}
-          listOfDirs={listOfDirs}
-          logDirectory={logDirectory}
-          setLogDirectory={setLogDirectory}
-          processDirectory={processDirectory}
-        />
+        <Grid item xs={leftPanelWidth} sx={{ mt: 0.5 }}>
+          {logDirectory ? (
+            <TextField
+              id="logDirectory"
+              label="Directory containing logs"
+              value={logDirectory}
+              size={"small"}
+              onChange={(e) => setLogDirectory(e.target.value)}
+              inputProps={{ style: { fontSize: 14 } }}
+              sx={{
+                width: (windowDimension.winWidth * leftPanelWidth) / 12 - 200,
+                mt: 1,
+                ml: 1,
+              }}
+            />
+          ) : null}
+          {!waitGetDir ? (
+            <Tooltip title="Go up to parent directory">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  const parentDir = logDirectory
+                    .split("/")
+                    .slice(0, -1)
+                    .join("/");
+                  if (mode === "local") {
+                    readLocalFiles(parentDir);
+                    setLogText(null);
+                    // localFileRef.current.click();
+                    setLogDirectory(parentDir);
+                  } else {
+                    setWaitGetDir(true);
+                    // resetCounts();
+                    setLogDirectory(parentDir);
+                    getLogWebDav(parentDir);
+                  }
+                  // processDirectory();
+                }}
+                sx={{ mt: 1, color: "green" }}
+              >
+                <Publish fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+          {!waitGetDir ? (
+            <Tooltip title="Read directory and show a list of logs to select from">
+              <Button
+                id="readDirectory"
+                onClick={() => {
+                  processDirectory();
+                }}
+                sx={{
+                  m: 2,
+                  fontSize: 12,
+                  backgroundColor: "lightgray",
+                  color: "darkgreen",
+                }}
+              >
+                Read
+              </Button>
+            </Tooltip>
+          ) : null}
+
+          {waitGetDir ? <CircularProgress sx={{ ml: 9, mt: 2 }} /> : null}
+          {!waitSelectLog && listOfLogs ? (
+            <Select
+              placeholder={
+                listOfLogs.length > 0
+                  ? "Choose a log (" + listOfLogs.length + " found)"
+                  : "No logs found"
+              }
+              options={listOfLogs}
+              value={selectedLog}
+              onChange={selectLog}
+              styles={selectStyles}
+            />
+          ) : null}
+          {waitSelectLog ? <CircularProgress sx={{ ml: 9, mt: 2 }} /> : null}
+        </Grid>
+        <Grid item xs={rightPanelWidth} sx={{ mt: 0.5 }}>
+          <Box
+            variant={"dense"}
+            sx={{
+              bgcolor: "background.paper",
+              color: "text.secondary",
+            }}
+          >
+            <TextField
+              label="Log Name"
+              value={selection}
+              size={"small"}
+              inputProps={{ style: { fontSize: 14 } }}
+              onChange={(event) => {
+                setSelection(event.target.value);
+              }}
+              sx={{
+                width: (windowDimension.winWidth * rightPanelWidth) / 12 - 100,
+                mt: 1,
+              }}
+            />
+            <Tooltip title="Load log - either starting with http or /">
+              <IconButton
+                size="small"
+                onClick={handleNewLog}
+                sx={{ mt: 1, color: "green" }}
+              >
+                <FileDownloadDone fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Get a list of versions to choose from (not yet working)">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setWaitGetDir(true);
+                  // resetCounts();
+                  getLogVersions(logDirectory);
+                }}
+                sx={{ mt: 1, color: "green" }}
+              >
+                <Download fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          {program && <b>Program:</b>} {program} &nbsp;{" "}
+          {submitted && <b>Submitted:</b>} {submitted} &nbsp;{" "}
+          {submitEnd && <b>Ended:</b>} {submitEnd} &nbsp;{" "}
+          {nLines && <b>Lines:</b>} {nLines}
+        </Grid>
+        <Grid item xs={leftPanelWidth}>
+          {uniqueTypes &&
+            // uniqueTypes.length === badgeCount.length &&
+            uniqueTypes.map((t) => {
+              if (uniqueTypes.length >= Object.keys(badgeCount).length)
+                return (
+                  <FormControlLabel
+                    key={t}
+                    label={t}
+                    control={
+                      <Badge color="info" badgeContent={badgeCount[t]}>
+                        <Checkbox
+                          checked={check[t] === undefined ? true : check[t]}
+                          onChange={() => changeCheck(t)}
+                          inputProps={{ "aria-label": "controlled" }}
+                        />
+                      </Badge>
+                    }
+                  />
+                );
+              else return null;
+            })}
+          <p />
+          <Box
+            placeholder="Empty"
+            sx={{
+              border: 0.5,
+              color: "gray",
+              fontSize: fontSize - 1,
+              fontFamily: "courier",
+              height: windowDimension.winHeight / verticalSplit,
+              // maxWidth: (windowDimension.winWidth / 12) * leftPanelWidth - 100,
+              overflow: "auto",
+            }}
+          >
+            {links &&
+              links.map((link, id) => {
+                // should we show a link?
+                let show = true;
+                uniqueTypes.forEach((t) => {
+                  if (!check[t] && link.type === t) show = false;
+                });
+                if (show) {
+                  return (
+                    <React.Fragment key={id}>
+                      {showLineNumbers ? zeroPad(link.lineNumber, 7) + " " : ""}
+                      <a
+                        style={{ color: `${link.linkColor}` }}
+                        href={`#${link.id}`}
+                        onClick={() => {
+                          setTimeout(function () {
+                            logRef.current.scrollBy({
+                              top: -33,
+                              left: 0,
+                              behavior: "smooth",
+                            });
+                          }, 500);
+                        }}
+                      >
+                        {link.text}
+                      </a>
+                      <br />
+                    </React.Fragment>
+                  );
+                } else return null;
+              })}
+          </Box>
+
+          <Tabs
+            value={tabValue}
+            onChange={(event, newValue) => {
+              changeTabValue(newValue);
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab
+              label="Outputs"
+              id={"tab0"}
+              sx={{
+                fontSize: 12,
+              }}
+            />
+            <Tab label="Inputs" id={"tab1"} sx={{ fontSize: 12 }} />
+            <Tab label="Files" id={"tab2"} sx={{ fontSize: 12 }} />
+            <Tab label="Real Time" id={"tab3"} sx={{ fontSize: 12 }} />
+            <Tab label="CPU Time" id={"tab4"} sx={{ fontSize: 12 }} />
+            <Tab
+              label="MPRINT"
+              id={"tab5"}
+              sx={{
+                fontSize: 12,
+              }}
+            />
+            <Tab label="MLOGIC" id={"tab6"} sx={{ fontSize: 12 }} />
+            <Tab label="SYMBOLGEN" id={"tab7"} sx={{ fontSize: 12 }} />
+          </Tabs>
+          {outputs && tabValue === 0 && (
+            <DataGridPro
+              rows={outputs}
+              rowHeight={rowHeight}
+              columns={ColDefnOutputs}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+                padding: iconPadding,
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 1 && (
+            <DataGridPro
+              rows={inputs}
+              rowHeight={rowHeight}
+              columns={ColDefnInputs}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 2 && (
+            <DataGridPro
+              rows={files}
+              rowHeight={rowHeight}
+              columns={ColDefnFiles}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 3 && (
+            <DataGridPro
+              rows={realTime}
+              rowHeight={rowHeight}
+              columns={ColDefnRealTime}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 4 && (
+            <DataGridPro
+              rows={cpuTime}
+              rowHeight={rowHeight}
+              columns={ColDefnCpuTime}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 5 && (
+            <DataGridPro
+              checkboxSelection
+              onSelectionModelChange={(newSelectionModel) => {
+                setSelectionModel(newSelectionModel);
+              }}
+              selectionModel={selectionModel}
+              rows={mprint}
+              rowHeight={rowHeight}
+              columns={ColDefnMprint}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+                "& .MuiSvgIcon-root": {
+                  width: "0.6em",
+                },
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 6 && (
+            <DataGridPro
+              rows={mlogic}
+              rowHeight={rowHeight}
+              columns={ColDefnMlogic}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+          {inputs && tabValue === 7 && (
+            <DataGridPro
+              rows={symbolgen}
+              rowHeight={rowHeight}
+              columns={ColDefnSymbolgen}
+              density="compact"
+              hideFooter={true}
+              sx={{
+                height: windowDimension.winHeight / verticalSplit,
+                fontWeight: "fontSize=5",
+                fontSize: "0.7em",
+              }}
+              onRowClick={(e) => {
+                window.location.hash = e.row.link;
+              }}
+              // components={{ Toolbar: GridToolbar }}
+            />
+          )}
+        </Grid>
+        <Grid item xs={rightPanelWidth}>
+          {dirListing}
+          {logText && (
+            <Box
+              placeholder="Empty"
+              sx={{
+                border: 2,
+                fontSize: fontSize,
+                fontFamily: "courier",
+                maxHeight: windowDimension.winHeight - 42 * verticalSplit,
+                maxWidth:
+                  (windowDimension.winWidth / 12) * rightPanelWidth - 25,
+                overflow: "auto",
+              }}
+              ref={logRef}
+            >
+              <pre
+                className="content"
+                style={{
+                  whiteSpace: "pre",
+                  padding: 10,
+                }}
+                dangerouslySetInnerHTML={{ __html: logText }}
+              ></pre>
+            </Box>
+          )}
+          {!logText && listOfDirs ? (
+            listOfDirs.map((dir, id) => {
+              return (
+                <Box
+                  key={"dir" + id}
+                  onClick={() => {
+                    setLogDirectory(logDirectory + "/" + dir);
+                    processDirectory(logDirectory + "/" + dir);
+                  }}
+                  sx={{ color: "blue", cursor: "pointer" }}
+                >
+                  {dir}
+                </Box>
+              );
+            })
+          ) : !logText ? (
+            <Box sx={{ m: 10, fontSize: 20, color: "red" }}>
+              Log will be displayed here.
+            </Box>
+          ) : null}
+          <Dialog
+            open={openModal}
+            onClose={() => setOpenModal(false)}
+            scroll={"paper"}
+            fullScreen
+            style={{ backdropFilter: "blur(5px" }}
+          >
+            <DialogTitle>
+              <Tooltip title={`Zoom out`}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setScale(scale > 0.25 ? scale - 0.25 : 0.125);
+                  }}
+                  sx={{
+                    backgroundColor: "white",
+                    color: "blue",
+                    float: "left",
+                  }}
+                >
+                  <ZoomOut fontSize="small" />
+                </IconButton>
+              </Tooltip>{" "}
+              <Tooltip title={`Reset`}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setScale(1);
+                  }}
+                  sx={{
+                    backgroundColor: "white",
+                    color: "blue",
+                    float: "left",
+                  }}
+                >
+                  <RestartAlt fontSize="small" />
+                </IconButton>
+              </Tooltip>{" "}
+              <Tooltip title={`Zoom in`}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setScale(scale + 0.5);
+                  }}
+                  sx={{
+                    backgroundColor: "white",
+                    color: "blue",
+                    float: "left",
+                  }}
+                >
+                  <ZoomIn fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Button
+                onClick={() => {
+                  setOpenModal(false);
+                }}
+              >
+                Close
+              </Button>
+              <Tooltip title={`Close Dialog`}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setOpenModal(false);
+                  }}
+                  sx={{
+                    backgroundColor: "white",
+                    color: "red",
+                    float: "right",
+                  }}
+                >
+                  <Close fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              {mermaidInfo.lines && (
+                <Tooltip title={`Copy Mermaid Code`}>
+                  <Chip
+                    label={mermaidInfo.lines.toLocaleString() + " lines"}
+                    sx={{
+                      fontSize: 12,
+                      float: "right",
+                    }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(chart);
+                    }}
+                  />
+                </Tooltip>
+              )}
+              {mermaidInfo.characters && (
+                <Tooltip title={`Copy Mermaid Code and open a mermaid editor`}>
+                  <Chip
+                    label={
+                      mermaidInfo.characters.toLocaleString() + " characters"
+                    }
+                    sx={{
+                      fontSize: 12,
+                      float: "right",
+                    }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(chart);
+                      setTimeout(function () {
+                        window.open("https://mermaid.live/");
+                      }, 500);
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </DialogTitle>
+            <DialogContent
+              sx={{
+                transform: `scale(${scale})`,
+                transformOrigin: "0% 0% 0px;",
+                width: Math.round(windowDimension.winWidth) - 50,
+                // width: Math.round(windowDimension.winWidth / scale) - 50,
+              }}
+            >
+              <Mermaid chart={chart} useMaxWidth={useMaxWidth} />
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            fullScreen
+            open={openRulesModal}
+            onClose={handleCloseRulesModal}
+          >
+            <DialogTitle>Rules Admin</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Table will be editable soon. New rules will be able to be added
+                too.
+              </DialogContentText>
+              {rules && (
+                <DataGridPro
+                  rows={rules.map((rule, id) => {
+                    return { id: id, ...rule };
+                  })}
+                  rowHeight={rowHeight}
+                  columns={ColDefnRules}
+                  density="compact"
+                  hideFooter={true}
+                  sx={{
+                    height: windowDimension.winHeight - 100,
+                    fontWeight: "fontSize=5",
+                    fontSize: "0.7em",
+                  }}
+                  // onRowClick={(e) => {
+                  //   window.location.hash = e.row.link;
+                  // }}
+                  // components={{ Toolbar: GridToolbar }}
+                />
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseRulesModal}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  alert("coming soon");
+                }}
+              >
+                Add a new rule
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Grid>
       </Grid>
-      <ChartDialog
-        open={openModal}
-        onClose={() => setOpenModal(false)}
-        chart={chart} scale={scale} setScale={setScale}
-        useMaxWidth={useMaxWidth}
-        windowDimension={windowDimension}
-        mermaidInfo={mermaidInfo}
-        direction={direction} setDirection={setDirection}
-        lineVar={lineVar} setLineVar={setLineVar}
-      />
-      <RulesDialog
-        open={openRulesModal}
-        onClose={handleCloseRulesModal}
-        rules={rules}
-        setRules={setRules}
-        mode={mode}
-      />
-      <InfoDialog
-        open={openInfo}
+      {/* Dialog with General info about this screen */}
+      <Dialog
+        fullWidth
+        maxWidth="xl"
         onClose={() => setOpenInfo(false)}
-      />
+        open={openInfo}
+      >
+        <DialogTitle>Info about this screen</DialogTitle>
+        <DialogContent>
+          <ul>
+            <li>
+              <a
+                href="https://github.com/argenxQuantitativeSciences/logviewer"
+                target="_blank"
+                rel="noreferrer"
+              >
+                App source code
+              </a>{" "}
+              {" - "}code for this app is held on GitHub.
+            </li>
+            <li>
+              <a
+                href={`https://argenxbvba.sharepoint.com/sites/Biostatistics/_layouts/15/doc.aspx?sourcedoc={ca0a4288-847f-4f24-8829-c17c1611c347}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Log Analysis at argenx
+              </a>
+              {" - "}this document gives an overview and explains what is
+              available for viewing logs at argenx.
+            </li>
+
+            <li>
+              <a
+                href={`https://argenxbvba.sharepoint.com/sites/Biostatistics/_layouts/15/doc.aspx?sourcedoc=%7be15cda2c-7a82-4301-b1bf-8fbaec90b5b0%7d`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Log Viewer User Guide
+              </a>
+              {" - "}this document explains more about how to use this Log
+              Viewer web application.
+            </li>
+            <li>
+              <a
+                href={`https://argenxbvba.sharepoint.com/:p:/r/sites/Biostatistics/Shared%20Documents/STAR%20processes/Checking%20your%20SAS%20log.pptx?d=w234104b39bfb408caaef918708059768&csf=1&web=1&e=xAb0I9`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Checking your SAS log
+              </a>
+              {" - "}take a look at this presentation that explains how log
+              checking works with the log viewer or SAS macro which both use
+              JSON files with rules defined.
+            </li>
+          </ul>
+          Direction of Chart -
+          <Tooltip title="Toggle diagram direction">
+            <FormControlLabel
+              sx={{
+                borderRadius: 3,
+                backgroundColor: "#cccccc",
+                mr: iconPadding,
+                ml: iconPadding,
+              }}
+              control={
+                <Switch
+                  checked={direction}
+                  onChange={() => {
+                    setDirection(!direction);
+                  }}
+                  name="direction"
+                  size="small"
+                  color="warning"
+                  sx={{ ml: 0.5, mr: 0.5 }}
+                />
+              }
+              label={direction ? "Left to Right." : "Top to Bottom."}
+            />
+          </Tooltip>
+          <Autocomplete
+            value={lineVar}
+            onChange={(event, newValue) => {
+              setLineVar(newValue);
+            }}
+            // inputValue={inputValue}
+            // onInputChange={(event, newInputValue) => {
+            //   setInputValue(newInputValue);
+            // }}
+            size="small"
+            id="lineVarId"
+            options={lineVarOptions}
+            sx={{ width: 300, mt: 2 }}
+            renderInput={(params) => (
+              <TextField {...params} label="Choose measurement for lines" />
+            )}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

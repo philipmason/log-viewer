@@ -63,8 +63,26 @@ export default class Mermaid extends React.Component {
   componentDidMount() {
     mermaid.contentLoaded();
   }
+  componentDidUpdate(prevProps) {
+    if (prevProps.chart !== this.props.chart) {
+      // Remove mermaid's processed attribute so it re-renders
+      const el = this.mermaidRef;
+      if (el) {
+        el.removeAttribute("data-processed");
+        el.innerHTML = this.props.chart;
+        mermaid.contentLoaded();
+      }
+    }
+  }
   render() {
     // console.log("this.props", this.props);
-    return <div className="mermaid">{this.props.chart}</div>;
+    return (
+      <div
+        className="mermaid"
+        ref={(el) => (this.mermaidRef = el)}
+      >
+        {this.props.chart}
+      </div>
+    );
   }
 }
