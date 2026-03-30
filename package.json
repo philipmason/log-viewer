@@ -2,10 +2,11 @@
   "name": "logviewer",
   "version": "1.1.0",
   "private": true,
-  "homepage": "https://argenxbvba.sharepoint.com/sites/Biostatistics/Shared%20Documents/Log%20Viewer",
+  "main": "electron-main.js",
   "dependencies": {
     "@emotion/react": "^11.10.5",
     "@emotion/styled": "^11.10.5",
+    "@fireworks-js/react": "^2.10.8",
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.1",
     "@mui/x-data-grid": "^5.17.17",
@@ -13,6 +14,9 @@
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "fireworks-js": "^2.10.8",
     "mermaid": "^10.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -25,7 +29,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "electron": "electron ."
   },
   "eslintConfig": {
     "extends": [
@@ -46,7 +51,7 @@
     ]
   },
   "devDependencies": {
-    "electron": "^24.3.0",
+    "electron": "^24.8.8",
     "electron-is-dev": "^2.0.0"
   }
 }

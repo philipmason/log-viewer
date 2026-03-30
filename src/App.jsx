@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Select from "react-select";
 import {
   Box,
@@ -14,6 +14,7 @@ import {
   Button,
   Switch,
   CircularProgress,
+  LinearProgress,
   Tabs,
   Tab,
   Dialog,
@@ -26,12 +27,17 @@ import {
   DialogActions,
   DialogContentText,
   Autocomplete,
+  Typography,
+  Divider,
 } from "@mui/material";
 // import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import { DataGridPro } from "@mui/x-data-grid-pro";
 import { LicenseInfo } from "@mui/x-data-grid-pro";
 
 import { getDir, getVersions, xmlToJson } from "./utility";
+import { Fireworks } from "@fireworks-js/react";
+// import type { FireworksHandlers } from "@fireworks-js/react";
+
 import "./App.css";
 // rules are kept on LSAF in /general/biostat/tools/common/metadata/rules.json
 import defaultRules from "./rules.json";
@@ -43,8 +49,6 @@ import {
   Download,
   ArrowCircleLeft,
   ArrowCircleRight,
-  ArrowUpward,
-  ArrowDownward,
   SquareFoot,
   FileDownloadDone,
   BarChart,
@@ -60,16 +64,21 @@ import {
   Info,
   Email,
   ContentPaste,
+  KeyboardDoubleArrowUp,
+  KeyboardDoubleArrowDown,
 } from "@mui/icons-material";
 // import { Routes, Route, useNavigate } from "react-router-dom";
 // import Mermaid from "react-mermaid";
 import Mermaid from "./Mermaid";
 
+LicenseInfo.setLicenseKey(
+  "a223b56d60901267734e67150910e406Tz0xMTU2MDYsRT0xNzg0ODUxMTk5MDAwLFM9cHJvLExNPXN1YnNjcmlwdGlvbixQVj1pbml0aWFsLEtWPTI="
+);
+
 function App() {
-  LicenseInfo.setLicenseKey(
-    "369a1eb75b405178b0ae6c2b51263cacTz03MTMzMCxFPTE3MjE3NDE5NDcwMDAsUz1wcm8sTE09c3Vic2NyaXB0aW9uLEtWPTI="
-  );
-  const rowHeight = 22,
+  const ref = useRef(null),
+    fgColor = "#ffffff",
+    rowHeight = 22,
     increment = 0.25,
     [chart, setChart] = useState(`flowchart TD
     Start --> Stop`),
@@ -82,11 +91,11 @@ function App() {
     [logOriginalText, setLogOriginalText] = useState(null),
     [showLineNumbers, setshowLineNumbers] = useState(null),
     [dirListing, setDirListing] = useState(null),
-    logRef = createRef(),
+    logRef = useRef(null),
     // localFileRef = createRef(),
     iconPadding = 0.25,
     [openInfo, setOpenInfo] = useState(false),
-    [direction, setDirection] = useState(true),
+    [direction, setDirection] = useState(false),
     // [showFileSelector, setShowFileSelector] = useState(false),
     [lastUrl, setLastUrl] = useState(null),
     [search, setSearch] = useState(null),
@@ -124,6 +133,7 @@ function App() {
       if (mode === "local") {
         setLastShowMacroLines(showMacroLines);
         setLastShowSource(showSource);
+        setIsFetchingFile(true);
         fetch(localUrl).then(function (response) {
           // console.log(response);
           if (response.type !== "basic") {
@@ -132,35 +142,40 @@ function App() {
                 console.log(
                   `${text.length} characters read from file ${localUrl}`
                 );
+                setIsFetchingFile(false);
                 setLogOriginalText(text);
-                setLogText(analyse(text));
+                setAnalyseAgain((prev) => (prev === null ? true : !prev));
               });
             } else {
               const message =
                 "Getting log failed, response = " + response.status;
+              setIsFetchingFile(false);
               setLogOriginalText(message);
               setLogText("<p>" + message + "</p>");
             }
           }
-        });
+        }).catch(() => setIsFetchingFile(false));
       } else {
         console.log("getLog:- url = ", url);
         // updateRules();
+        setIsFetchingFile(true);
         fetch(url).then(function (response) {
           setLastUrl(url);
           setLastShowMacroLines(showMacroLines);
           setLastShowSource(showSource);
           if (response.ok) {
             response.text().then(function (text) {
+              setIsFetchingFile(false);
               setLogOriginalText(text);
-              setLogText(analyse(text));
+              setAnalyseAgain((prev) => (prev === null ? true : !prev));
             });
           } else {
             const message = "Getting log failed, response = " + response.status;
+            setIsFetchingFile(false);
             setLogOriginalText(message);
             setLogText("<p>" + message + "</p>");
           }
-        });
+        }).catch(() => setIsFetchingFile(false));
       }
     },
     [listOfLogs, setListOfLogs] = useState(null),
@@ -172,12 +187,6 @@ function App() {
       winWidth: window.innerWidth - 50,
       winHeight: window.innerHeight - 50,
     }),
-    detectSize = () => {
-      detectHW({
-        winWidth: window.innerWidth - 50,
-        winHeight: window.innerHeight - 50,
-      });
-    },
     zeroPad = (num, places) => String(num).padStart(places, "0"),
     // [counts, setCounts] = useState({}),
     [selectedLocalFile, setSelectedLocalFile] = useState(""),
@@ -202,6 +211,9 @@ function App() {
     },
     [currentLine, setCurrentLine] = useState(1),
     [macrosSelected, setMacrosSelected] = useState(null),
+    [isProcessingLog, setIsProcessingLog] = useState(false),
+    [processingProgress, setProcessingProgress] = useState(0),
+    [isFetchingFile, setIsFetchingFile] = useState(false),
     resetCounts = () => {
       console.log("resetCounts");
       // const tempBadgeCount = {},
@@ -244,8 +256,20 @@ function App() {
     },
     [popUpMessage, setPopUpMessage] = useState(null),
     [openPopUp, setOpenPopUp] = useState(false),
+    toggleFireworks = () => {
+      if (!ref.current) return;
+      if (ref.current.isRunning) {
+        ref.current.stop();
+      } else {
+        ref.current.start();
+        setTimeout(() => {
+          ref.current.stop();
+        }, 5000);
+      }
+    },
     extractSasCode = (text) => {
       if (!logOriginalText) return;
+      toggleFireworks();
       let lastLineNumber = null;
       const sasCode = logOriginalText
         .split("\n")
@@ -286,7 +310,7 @@ function App() {
         setOpenPopUp(true);
         setPopUpMessage("Pasting contents of clipboard");
         setLogOriginalText(text);
-        setLogText(analyse(text));
+        setAnalyseAgain((prev) => (prev === null ? true : !prev));
       } else {
         setOpenPopUp(true);
         setPopUpMessage(
@@ -335,66 +359,53 @@ function App() {
           let preparedToReturn = element;
           // make sure we have rules that handle all the things we might want to link to, so that there will be a link to be used
           // we only handle the first match to a rule, and then ignore any further ones
-          rules.forEach((rule) => {
-            if (
-              !matchFound &&
-              ((rule.ruleType === "startswith" &&
-                element.startsWith(rule.startswith)) ||
-                (rule.ruleType === "regex" &&
-                  rule.regularExpression.test(element)))
-            ) {
-              // id++;
-              id = lineNumber;
-              // console.log('id',id)
-              matchFound = true; // set this showing we have matched a rule for this line, so we dont want to match any other rules for this line
-              const tag = rule.prefix,
-                prefix = tag.substring(0, tag.length - 1) + ` id='${id}'>`;
-              if (rule.anchor)
-                tempLinks.push({
-                  text: element,
-                  id: id,
-                  lineNumber: lineNumber,
-                  linkColor: rule.linkColor,
-                  type: rule.type,
-                  interesting: rule.interesting,
-                });
-              // tempLineNumberToLink.push({ id: id, lineNumber: lineNumber });
-              incrementCount(rule.type);
-              preparedToReturn = prefix + preparedToReturn + rule.suffix;
-              // handle link creation, where we have a regex and want to make something using the matching text
-              if (
-                rule.ruleType === "regex" &&
-                rule.substitute &&
-                rule.regularExpression.test(element)
-              ) {
-                // if (id>648) console.log('-')
-                const matches = element.match(rule.regularExpression);
-                // if (id>648) console.log('-')
-                matches.forEach((match) => {
-                  preparedToReturn = element;
-                  // preparedToReturn = element;
-                  if (rule.prefix.includes("{{matched}}")) {
-                    //TODO: if match ends in . then remove it when making link
-                    const a = rule.prefix.replace("{{matched}}", match),
-                      b = rule.suffix.replace("{{matched}}", match);
-                    preparedToReturn = element.replace(match, a + b);
-                  }
-                  if (rule.prefix.includes("{{line}}")) {
-                    const c = rule.prefix.replace(
-                        "{{line}}",
-                        encodeURI(element)
-                      ),
-                      d = rule.suffix.replace("{{line}}", element);
-                    preparedToReturn = c + d;
-                  }
-                });
+          for (const rule of rules) {
+            if (matchFound) break;
+            const startsWithMatch =
+              rule.ruleType === "startswith" && element.startsWith(rule.startswith);
+            const regexMatch =
+              rule.ruleType === "regex" && rule.regularExpression.test(element);
+            if (!startsWithMatch && !regexMatch) continue;
+
+            id = lineNumber;
+            matchFound = true; // only first matching rule applies per line
+            const tag = rule.prefix,
+              prefix = tag.substring(0, tag.length - 1) + ` id='${id}'>`;
+            if (rule.anchor)
+              tempLinks.push({
+                text: element,
+                id: id,
+                lineNumber: lineNumber,
+                linkColor: rule.linkColor,
+                type: rule.type,
+                interesting: rule.interesting,
+              });
+            incrementCount(rule.type);
+            preparedToReturn = prefix + preparedToReturn + rule.suffix;
+
+            // Build substituted links only when the regex matched this line.
+            if (rule.ruleType === "regex" && rule.substitute && regexMatch) {
+              const matches = element.match(rule.regularExpression) || [];
+              for (const match of matches) {
+                preparedToReturn = element;
+                if (rule.prefix.includes("{{matched}}")) {
+                  const a = rule.prefix.replace("{{matched}}", match),
+                    b = rule.suffix.replace("{{matched}}", match);
+                  preparedToReturn = element.replace(match, a + b);
+                }
+                if (rule.prefix.includes("{{line}}")) {
+                  const c = rule.prefix.replace("{{line}}", encodeURI(element)),
+                    d = rule.suffix.replace("{{line}}", element);
+                  preparedToReturn = c + d;
+                }
               }
             }
-          });
+          }
           // console.log("-");
-          setLinks(tempLinks);
           return preparedToReturn;
         });
+
+      setLinks(tempLinks);
 
       // resetCounts();
       if (uniqueTypes) {
@@ -548,7 +559,7 @@ function App() {
         ? "/general/biostat/tools/logviewer2/rules"
         : navigator.platform.startsWith("Win") && mode === "local"
         ? "C:/github/logviewer/src"
-        : "/Users/philipmason/github/logviewer/src"
+        : "/Users/philipmason/github/log-viewer/src"
     ),
     [listOfRules, setListOfRules] = useState([]),
     [openRulesMenu, setOpenRulesMenu] = useState(false),
@@ -792,18 +803,18 @@ function App() {
       window.location.href = "#" + id;
       window.history.replaceState(null, null, url);
     },
-    tempInputs = [],
-    tempFiles = [],
-    tempOutputs = [],
-    tempRealTime = [],
-    tempCpuTime = [],
     [program, setProgram] = useState(null),
     [submitted, setSubmitted] = useState(null),
     [submitEnd, setSubmitEnd] = useState(null),
     [analyseAgain, setAnalyseAgain] = useState(null),
     analyseLog = () => {
       // extracts info for tables in the bottom left of screen
-      const logArray = logOriginalText.split("\n"),
+      const tempInputs = [],
+        tempFiles = [],
+        tempOutputs = [],
+        tempRealTime = [],
+        tempCpuTime = [],
+        logArray = logOriginalText.split("\n"),
         tempMprint = {},
         tempMlogic = {},
         tempSymbolgen = {};
@@ -1156,7 +1167,6 @@ function App() {
           if (item.type === "real") step++;
           return { step: item.type === "real" ? step - 1 : step, ...item };
         });
-      console.log("all", all);
       const inputRows = all.filter((item) => item.type === "input"),
         outputRows = all.filter((item) => item.type === "output"),
         realRows = all.filter((item) => item.type === "real");
@@ -1267,13 +1277,21 @@ function App() {
           url = "http://localhost:3001/dir/" + dir;
         setLogDirectory(decodeURIComponent(dir));
         console.log("url", url);
-        fetch(url).then(function (response) {
-          console.log(response);
-          response.text().then(function (text) {
+        setIsFetchingFile(true);
+        fetch(url)
+          .then(function (response) {
+            console.log(response);
+            if (!response.ok) {
+              throw new Error(
+                `Could not read directory: ${decodeURIComponent(dir)} (${response.status})`
+              );
+            }
+            return response.text();
+          })
+          .then(function (text) {
             const dirObject = JSON.parse(text);
-            // const { dirs, files } = dirObject;
-            const files = dirObject,
-              dirs = dirObject.filter((d) => !d.includes("."));
+            const files = Array.isArray(dirObject) ? dirObject : [],
+              dirs = files.filter((d) => !d.includes("."));
             console.log(
               "dirObject",
               dirObject,
@@ -1288,9 +1306,7 @@ function App() {
             );
             setSelectedLog(null);
             setListOfDirs(dirs);
-            const parsedText = JSON.parse(text);
-            console.log("parsedText", parsedText);
-            setLogOriginalText(parsedText.join("\n") || text);
+            setLogOriginalText(files.join("\n") || text);
             makeDirListing(dirs);
             setListOfLogs(
               files
@@ -1312,8 +1328,14 @@ function App() {
                   return 0;
                 })
             );
+            setIsFetchingFile(false);
+          })
+          .catch((error) => {
+            console.error(error);
+            setIsFetchingFile(false);
+            setOpenPopUp(true);
+            setPopUpMessage(error.message || "Failed to read local directory");
           });
-        });
       }
     },
     previousSearchTerm = () => {
@@ -1340,6 +1362,32 @@ function App() {
     },
     [shiftLineSpaces, setShiftLineSpaces] = useState(null);
   let counts = {};
+  const processingStartedAtRef = useRef(0);
+
+  const processLogWithProgress = (textToProcess, includeTables = true) => {
+    if (!textToProcess) return;
+    processingStartedAtRef.current = Date.now();
+    setIsProcessingLog(true);
+    setProcessingProgress(10);
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (includeTables) {
+          setProcessingProgress(35);
+          analyseLog();
+        }
+        setProcessingProgress(80);
+        setLogText(analyse(textToProcess));
+        setProcessingProgress(100);
+        const minVisibleMs = 700,
+          elapsed = Date.now() - processingStartedAtRef.current,
+          remaining = Math.max(0, minVisibleMs - elapsed);
+        setTimeout(() => {
+          setIsProcessingLog(false);
+          setProcessingProgress(0);
+        }, remaining);
+      });
+    }, 0);
+  };
 
   // update when rules change
   useEffect(() => {
@@ -1360,7 +1408,7 @@ function App() {
     });
     setBadgeCount(tempBadgeCount);
     setCheck(tempCheck);
-    setAnalyseAgain(!analyseAgain);
+    setAnalyseAgain((prev) => !prev);
     setLogText(logOriginalText);
     // eslint-disable-next-line
   }, [uniqueTypes]);
@@ -1369,12 +1417,7 @@ function App() {
   useEffect(() => {
     if (!logOriginalText || analyseAgain === null) return;
     console.log("*** analyseAgain", analyseAgain, logOriginalText.length);
-    // resetCounts();
-    // Object.keys(badgeCount).forEach((key) => {
-    //   badgeCount[key] = 0;
-    // });
-    analyseLog(); // populate tables in bottom left of screen
-    setLogText(analyse(logOriginalText));
+    processLogWithProgress(logOriginalText, true);
     // eslint-disable-next-line
   }, [analyseAgain, logOriginalText]);
 
@@ -1382,7 +1425,7 @@ function App() {
   useEffect(() => {
     if (logOriginalText === null || showLineNumbers === null) return;
     console.log("*** showLineNumbers", showLineNumbers);
-    setLogText(analyse(logOriginalText));
+    processLogWithProgress(logOriginalText, false);
     // eslint-disable-next-line
   }, [showLineNumbers]);
 
@@ -1390,7 +1433,7 @@ function App() {
     console.log("*** href", href);
     document.title = "Log Viewer";
     const splitQuestionMarks = href.split("?");
-    console.log('splitQuestionMarks', splitQuestionMarks)
+    console.log("splitQuestionMarks", splitQuestionMarks);
     // if a log was passed in then extract log and logDir
     if (splitQuestionMarks.length > 1 && href.includes("log=")) {
       const splitEquals = splitQuestionMarks[1].split("="),
@@ -1468,12 +1511,17 @@ function App() {
   }, [href]);
 
   useEffect(() => {
-    console.log("*** windowDimension", windowDimension);
-    window.addEventListener("resize", detectSize);
-    return () => {
-      window.removeEventListener("resize", detectSize);
+    const onResize = () => {
+      detectHW({
+        winWidth: window.innerWidth - 50,
+        winHeight: window.innerHeight - 50,
+      });
     };
-  }, [windowDimension]);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   // for remote mode
   useEffect(() => {
@@ -1484,10 +1532,9 @@ function App() {
     console.log("*** remote");
     const defaultDirectory = navigator.platform.startsWith("Win")
       ? "/general/biostat/jobs/dashboard/dev/logs"
-      : "/Users/philipmason/github/logviewer/tests";
+      : "/Users/philipmason/github/log-viewer/tests";
     setLogDirectory(defaultDirectory);
     getLogWebDav(defaultDirectory); // get the list of logs by reading directory
-    setLogText(analyse(logOriginalText));
     // eslint-disable-next-line
   }, []);
 
@@ -1502,7 +1549,7 @@ function App() {
     // console.log(navigator);
     const defaultDirectory = navigator.platform.startsWith("Win")
       ? "C:/github/logviewer/tests"
-      : "/Users/philipmason/github/logviewer/tests";
+      : "/Users/philipmason/github/log-viewer/tests";
     setLogDirectory(defaultDirectory);
     readLocalFiles(defaultDirectory);
 
@@ -1575,7 +1622,7 @@ function App() {
         console.log(`${text.length} characters were read from file ${url}`);
         // setAnalyseAgain(!analyseAgain);
         setLogOriginalText(text);
-        setLogText(analyse(text));
+        setAnalyseAgain((prev) => (prev === null ? true : !prev));
       });
     });
     // eslint-disable-next-line
@@ -1607,14 +1654,21 @@ function App() {
 
   return (
     <Box>
-      <AppBar position="static">
-        <Toolbar variant="dense" disableGutters>
+      <AppBar
+        position="static"
+        elevation={3}
+        sx={{
+          background: "linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #0277bd 100%)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+        }}
+      >
+        <Toolbar variant="dense" disableGutters sx={{ px: 0.5 }}>
           <Tooltip title="Move center to the left">
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1632,8 +1686,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1649,8 +1703,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1664,12 +1718,13 @@ function App() {
               <ArrowCircleRight />
             </IconButton>
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Tooltip title="Smaller">
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1684,8 +1739,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1700,8 +1755,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1712,12 +1767,13 @@ function App() {
               <Add />
             </IconButton>
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Tooltip title="Download SAS Log">
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1730,18 +1786,22 @@ function App() {
           </Tooltip>
           <Tooltip title="Show Source Lines">
             <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Src</Typography>}
               sx={{
-                borderRadius: 3,
-                backgroundColor: "#555555",
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
                 mr: iconPadding,
                 ml: iconPadding,
+                m: 0.25,
               }}
               control={
                 <Switch
                   checked={showSource}
                   onChange={() => {
                     setShowSource(!showSource);
-                    setAnalyseAgain(!analyseAgain);
+                    setAnalyseAgain((prev) => !prev);
                   }}
                   name="source"
                   size="small"
@@ -1752,18 +1812,22 @@ function App() {
           </Tooltip>
           <Tooltip title="Show Mprint/Mlogic/Symbolgen/Mautocomploc Lines">
             <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Mac</Typography>}
               sx={{
-                borderRadius: 3,
-                backgroundColor: "#555555",
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
                 mr: iconPadding,
                 ml: iconPadding,
+                m: 0.25,
               }}
               control={
                 <Switch
                   checked={showMacroLines}
                   onChange={() => {
                     setshowMacroLines(!showMacroLines);
-                    setAnalyseAgain(!analyseAgain);
+                    setAnalyseAgain((prev) => !prev);
                   }}
                   name="mprint"
                   size="small"
@@ -1775,11 +1839,15 @@ function App() {
           </Tooltip>
           <Tooltip title="Show Line numbers">
             <FormControlLabel
+              label={<Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.85)", userSelect: "none" }}>Ln#</Typography>}
               sx={{
-                borderRadius: 3,
-                backgroundColor: "#555555",
+                borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                px: 0.75,
                 mr: iconPadding,
                 ml: iconPadding,
+                m: 0.25,
               }}
               control={
                 <Switch
@@ -1795,13 +1863,14 @@ function App() {
               }
             />
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Tooltip title="Show Chart">
             <IconButton
               size="small"
               onClick={() => setOpenModal(true)}
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
                 ml: iconPadding,
@@ -1814,8 +1883,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1831,8 +1900,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1847,8 +1916,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1863,8 +1932,8 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1888,8 +1957,8 @@ function App() {
               }}
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1901,18 +1970,19 @@ function App() {
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
               onClick={(e) => {
-                setAnalyseAgain(!analyseAgain);
+                setAnalyseAgain((prev) => !prev);
               }}
             >
               <Refresh />
             </IconButton>
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Snackbar
             open={openPopUp}
             onClose={() => setOpenPopUp(false)}
@@ -1935,6 +2005,7 @@ function App() {
                 </MenuItem>
               ))}
           </Menu>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Tooltip title={`Compress by ${increment}`}>
             <IconButton
               size="small"
@@ -1942,8 +2013,8 @@ function App() {
                 setVerticalSplit(verticalSplit + increment);
               }}
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1958,8 +2029,8 @@ function App() {
                 setVerticalSplit(verticalSplit - increment);
               }}
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1967,12 +2038,14 @@ function App() {
               <Expand />
             </IconButton>
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <Tooltip title="Page Down">
             <IconButton
               size="small"
+              // color="secondary"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1981,15 +2054,15 @@ function App() {
                 logRef.current.scrollBy(0, clientHeight - 20);
               }}
             >
-              <ArrowDownward />
+              <KeyboardDoubleArrowDown />
             </IconButton>
           </Tooltip>
           <Tooltip title="Page Up">
             <IconButton
               size="small"
               sx={{
-                color: "black",
-                backgroundColor: "#aaaaff",
+                color: fgColor,
+                // backgroundColor: bgColor,
                 borderRadius: 3,
                 mr: iconPadding,
               }}
@@ -1998,7 +2071,7 @@ function App() {
                 logRef.current.scrollBy(0, -(clientHeight - 10));
               }}
             >
-              <ArrowUpward />
+              <KeyboardDoubleArrowUp />
             </IconButton>
           </Tooltip>
           <Tooltip title="Next Interesting thing">
@@ -2015,11 +2088,13 @@ function App() {
               }}
               sx={{
                 borderRadius: 3,
-                backgroundColor: "lightblue",
+                color: "yellow",
+                // backgroundColor: bgColor2,
+
                 mr: iconPadding,
               }}
             >
-              <ArrowDownward />
+              <KeyboardDoubleArrowDown />
             </IconButton>
           </Tooltip>
           <Tooltip title="Previous Interesting thing">
@@ -2027,7 +2102,8 @@ function App() {
               size="small"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "lightblue",
+                color: "yellow",
+                // backgroundColor: bgColor2,
                 mr: iconPadding,
               }}
               onClick={() => {
@@ -2041,7 +2117,7 @@ function App() {
                 }
               }}
             >
-              <ArrowUpward />
+              <KeyboardDoubleArrowUp />
             </IconButton>
           </Tooltip>
           <Tooltip title="Next Error">
@@ -2049,10 +2125,11 @@ function App() {
               size="small"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "red",
-                color: "white",
+                // backgroundColor: "lightblue",
+                color: "#fc4514",
                 mr: iconPadding,
               }}
+              // color="error"
               onClick={() => {
                 const errors = links.filter(
                   (link) =>
@@ -2064,7 +2141,7 @@ function App() {
                 }
               }}
             >
-              <ArrowDownward />
+              <KeyboardDoubleArrowDown />
             </IconButton>
           </Tooltip>
           <Tooltip title="Previous Error">
@@ -2072,10 +2149,10 @@ function App() {
               size="small"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "red",
-                color: "white",
+                color: "#fc4514",
                 mr: iconPadding,
               }}
+              // color="error"
               onClick={() => {
                 const errors = links.filter(
                   (link) =>
@@ -2088,15 +2165,16 @@ function App() {
                 }
               }}
             >
-              <ArrowUpward />
+              <KeyboardDoubleArrowUp />
             </IconButton>
           </Tooltip>
           <Tooltip title="Next Warning">
             <IconButton
               size="small"
+              // color="warning"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "lightgreen",
+                color: "#FFC300",
                 mr: iconPadding,
               }}
               onClick={() => {
@@ -2110,15 +2188,16 @@ function App() {
                 }
               }}
             >
-              <ArrowDownward />
+              <KeyboardDoubleArrowDown />
             </IconButton>
           </Tooltip>
           <Tooltip title="Previous Warning">
             <IconButton
               size="small"
+              // color="warning"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "lightgreen",
+                color: "#FFC300",
                 mr: iconPadding,
               }}
               onClick={() => {
@@ -2133,14 +2212,16 @@ function App() {
                 }
               }}
             >
-              <ArrowUpward />
+              <KeyboardDoubleArrowUp />
             </IconButton>
           </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: "rgba(255,255,255,0.25)", mx: 0.75, my: 0.5 }} />
           <TextField
             label="Search (case-sensitive)"
             value={search}
             size={"small"}
-            inputProps={{ style: { fontSize: 10, height: "1.1em" } }}
+            inputProps={{ style: { fontSize: 12, height: "1.1em", color: "#1a1a2e" } }}
+            InputLabelProps={{ style: { fontSize: 11, color: "#555" } }}
             onChange={(event) => {
               setSearch(event.target.value);
             }}
@@ -2155,39 +2236,46 @@ function App() {
                 }, 100);
               }
             }}
-            color="secondary"
             sx={{
               flexGrow: 1,
               mt: 0.6,
               mr: 1,
               ml: 1,
-              backgroundColor: "lightblue",
+              mb: 0.5,
+              backgroundColor: "rgba(255,255,255,0.92)",
+              borderRadius: 1,
+              "& .MuiOutlinedInput-root": {
+                "& fieldset": { borderColor: "rgba(255,255,255,0.4)" },
+                "&:hover fieldset": { borderColor: "#fff" },
+              },
             }}
           />
           <Tooltip title="Next search term">
             <IconButton
               size="small"
+              color="secondary"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "#e0ccff",
+                // backgroundColor: "#e0ccff",
                 mr: iconPadding,
               }}
               onClick={nextSearchItem}
             >
-              <ArrowDownward />
+              <KeyboardDoubleArrowDown />
             </IconButton>
           </Tooltip>
           <Tooltip title="Previous search term">
             <IconButton
               size="small"
+              color="secondary"
               sx={{
                 borderRadius: 3,
-                backgroundColor: "#e0ccff",
+                // backgroundColor: "#e0ccff",
                 mr: iconPadding,
               }}
               onClick={previousSearchTerm}
             >
-              <ArrowUpward />
+              <KeyboardDoubleArrowUp />
             </IconButton>
           </Tooltip>{" "}
           <Tooltip title="Information about this screen">
@@ -2201,7 +2289,7 @@ function App() {
               }}
               sx={{
                 borderRadius: 3,
-                backgroundColor: "#0000ff",
+                // backgroundColor: "#0000ff",
                 color: "white",
                 mr: iconPadding,
               }}
@@ -2211,7 +2299,36 @@ function App() {
           </Tooltip>
         </Toolbar>
       </AppBar>
-
+      {isFetchingFile ? (
+        <Box sx={{ px: 1, pt: 0.5, bgcolor: "#fff3e0" }}>
+          <Typography sx={{ fontSize: 12, color: "#bf360c", mb: 0.25 }}>
+            Loading file...
+          </Typography>
+          <LinearProgress variant="indeterminate" color="warning" />
+        </Box>
+      ) : null}
+      {isProcessingLog ? (
+        <Box sx={{ px: 1, pt: 0.5, bgcolor: "#f6f7fb" }}>
+          <Typography sx={{ fontSize: 12, color: "#1a237e", mb: 0.25 }}>
+            Processing log... {Math.round(processingProgress)}%
+          </Typography>
+          <LinearProgress variant="determinate" value={processingProgress} />
+        </Box>
+      ) : null}
+      {ref?.current?.isRunning && (
+        <Fireworks
+          ref={ref}
+          options={{ opacity: 0.5 }}
+          style={{
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            position: "fixed",
+            // background: "#000",
+          }}
+        />
+      )}
       <Grid container spacing={1}>
         <Grid item xs={leftPanelWidth} sx={{ mt: 0.5 }}>
           {logDirectory ? (
@@ -2751,7 +2868,8 @@ function App() {
               sx={{
                 transform: `scale(${scale})`,
                 transformOrigin: "0% 0% 0px;",
-                width: Math.round(windowDimension.winWidth / scale) - 50,
+                width: Math.round(windowDimension.winWidth) - 50,
+                // width: Math.round(windowDimension.winWidth / scale) - 50,
               }}
             >
               <Mermaid chart={chart} useMaxWidth={useMaxWidth} />

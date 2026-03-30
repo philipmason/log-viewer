@@ -1,0 +1,201 @@
+digraph SAS_Disposition_Analysis {
+    // Graph attributes
+    rankdir=TB;
+    node [shape=box, style=filled, fillcolor=lightblue];
+    edge [color=darkblue];
+    
+    // Input datasets
+    subgraph cluster_input {
+        label="Input Datasets (SDTM)";
+        style=filled;
+        fillcolor=lightgray;
+        
+        INLIB_DM [label="INLIB.DM\n(Demographics)\n162 obs"];
+        INLIB_DS [label="INLIB.DS\n(Disposition)\n636 obs"];
+        INLIB_EX [label="INLIB.EX\n(Exposure)\n159 obs"];
+    }
+    
+    // Initial data copies to WORK library
+    INLIB_DM -> DM [label="data dm"];
+    INLIB_DS -> DS [label="data ds"];
+    INLIB_EX -> EX [label="data ex"];
+    
+    // Data preprocessing
+    DM [label="DM\n(Demographics)\n162 obs"];
+    DS [label="DS\n(Disposition)\n636 obs"];
+    EX [label="EX\n(Exposure)\n159 obs"];
+    
+    // Transform DM dataset
+    DM -> DM_transformed [label="rename actarm→arm\nadd arm_display\npropcase"];
+    DM_transformed [label="DM\n(Transformed)\n162 obs", fillcolor=lightyellow];
+    
+    // Transform DS dataset
+    DS -> DS_transformed [label="propcase dsdecod\nhandle dscat/dsscat\nmissing values"];
+    DS_transformed [label="DS\n(Transformed)\n636 obs", fillcolor=lightyellow];
+    
+    // Sort operations
+    DM_transformed -> DM_sorted [label="proc sort\nby usubjid"];
+    DS_transformed -> DS_sorted [label="proc sort\nby usubjid"];
+    EX -> EX_sorted [label="proc sort\nby usubjid\nnodupkey\n159 obs"];
+    
+    DM_sorted [label="DM\n(Sorted)", fillcolor=lightgreen];
+    DS_sorted [label="DS\n(Sorted)", fillcolor=lightgreen];
+    EX_sorted [label="EX\n(Sorted)\n159 obs", fillcolor=lightgreen];
+    
+    // First merge: DM + DS
+    DM_sorted -> DM_DS [label="merge"];
+    DS_sorted -> DM_DS [label="merge"];
+    DM_DS [label="DM_DS\n(All Subjects)\n636 obs", fillcolor=orange];
+    
+    // Add study day calculations
+    DM_DS -> DM_DS_withdsdy [label="calculate dsdy\nfrom dsstdtc/rfstdtc"];
+    DM_DS_withdsdy [label="DM_DS\n(with dsdy)\n636 obs", fillcolor=orange];
+    
+    // Second merge: Add exposure
+    DM_DS_withdsdy -> DM_DS_EX [label="merge with EX\nkeep exposed only"];
+    EX_sorted -> DM_DS_EX;
+    DM_DS_EX [label="DM_DS_EX\n(Exposed Subjects)\n636 obs", fillcolor=orange];
+    
+    // Disposition by ARM analysis - All subjects
+    subgraph cluster_byarm1 {
+        label="Disposition by ARM - All Subjects";
+        style=filled;
+        fillcolor=wheat;
+        
+        DM_DS_withdsdy -> DM_DS_SORT [label="proc sort\nby usubjid dscat dsscat"];
+        DM_DS_SORT -> DM_DS_CSCSL [label="keep last event\nper category/subcat"];
+        DM_DS_CSCSL -> BY_CAT [label="proc sql\ncount by dscat\ndsscat, dsdecod, arm\n21 obs"];
+        BY_CAT -> RAN_ARM [label="calculate\nrandomized counts"];
+        RAN_ARM [label="RAN_ARM\n(Arm totals)\n3 obs"];
+        BY_CAT -> BY_CAT_ARM [label="merge"];
+        RAN_ARM -> BY_CAT_ARM;
+        BY_CAT_ARM -> BY_DSDECODE [label="transpose\nto wide format\n10 obs"];
+        BY_DSDECODE -> FINAL_DISPOSITIONA [label="reorder columns\nstandardize missing"];
+    }
+    
+    FINAL_DISPOSITIONA [label="FINAL_DISPOSITIONA\n(Summary Table)\n10 obs", fillcolor=pink, shape=doubleoctagon];
+    
+    // Disposition by ARM analysis - Exposed subjects
+    subgraph cluster_byarm2 {
+        label="Disposition by ARM - Exposed Subjects";
+        style=filled;
+        fillcolor=wheat;
+        
+        DM_DS_EX -> DM_DS_EX_SORT [label="proc sort"];
+        DM_DS_EX_SORT -> DM_DS_EX_CSCSL [label="keep last event"];
+        DM_DS_EX_CSCSL -> BY_CAT_EX [label="proc sql\ncount by groups"];
+        BY_CAT_EX [label="BY_CAT\n21 obs"];
+        BY_CAT_EX -> RAN_ARM_EX [label="calculate totals"];
+        RAN_ARM_EX [label="RAN_ARM\n3 obs"];
+        BY_CAT_EX -> BY_CAT_ARM_EX [label="merge"];
+        RAN_ARM_EX -> BY_CAT_ARM_EX;
+        BY_CAT_ARM_EX [label="BY_CAT_ARM\n21 obs"];
+        BY_CAT_ARM_EX -> BY_DSDECODE_EX [label="transpose\n10 obs"];
+        BY_DSDECODE_EX [label="BY_DSDECODE"];
+        BY_DSDECODE_EX -> FINAL_DISPOSITIONB [label="reorder\nstandardize"];
+    }
+    
+    FINAL_DISPOSITIONB [label="FINAL_DISPOSITIONB\n(Summary Table)\n10 obs", fillcolor=pink, shape=doubleoctagon];
+    
+    // Time to Event Analysis - All subjects
+    subgraph cluster_tte1 {
+        label="Time to Event - All Subjects";
+        style=filled;
+        fillcolor=lightcyan;
+        
+        DM_DS_withdsdy -> DM_DS_nodupe [label="proc sort\nnodupkey\n634 obs"];
+        DM_DS_nodupe [label="DM_DS\n(deduplicated)"];
+        DM_DS_nodupe -> BY_DSDECOD1 [label="proc summary\nby arm, dsdecod\n8 obs"];
+        DM_DS_nodupe -> BY_DSDECOD_DAY1 [label="proc summary\nby arm, dsdecod, dsdy\n14 obs"];
+        BY_DSDECOD1 [label="BY_DSDECOD\n(event counts)"];
+        BY_DSDECOD_DAY1 [label="BY_DSDECOD_DAY\n(daily counts)"];
+        BY_DSDECOD_DAY1 -> BY_DSDECOD_DAY1_expanded [label="expand days\ncumulative sum\n159 obs"];
+        BY_DSDECOD_DAY1_expanded [label="BY_DSDECOD_DAY1"];
+        BY_DSDECOD_DAY1_expanded -> BY_DS1 [label="merge\ncalc cum_percent"];
+        BY_DSDECOD1 -> BY_DS1;
+        BY_DS1 [label="BY_DS\n159 obs"];
+        BY_DS1 -> BY_DS2_1 [label="merge with\nARM + DSD_NUM"];
+        BY_DS2_1 [label="BY_DS2"];
+        BY_DS2_1 -> BY_DS2_ONE1 [label="transpose\n124 obs"];
+        BY_DS2_ONE1 [label="BY_DS2_ONE"];
+        BY_DS2_ONE1 -> DSDECOD1 [label="subset order=1\n31 obs"];
+        BY_DS2_ONE1 -> DSDECOD2 [label="subset order=2\n31 obs"];
+        BY_DS2_ONE1 -> DSDECOD3 [label="subset order=3\n31 obs"];
+        BY_DS2_ONE1 -> DSDECOD4 [label="subset order=4\n31 obs"];
+    }
+    
+    DSDECOD1 [label="DSDECOD1\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD2 [label="DSDECOD2\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD3 [label="DSDECOD3\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD4 [label="DSDECOD4\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    
+    // Time to Event Analysis - Exposed subjects
+    subgraph cluster_tte2 {
+        label="Time to Event - Exposed Subjects";
+        style=filled;
+        fillcolor=lightcyan;
+        
+        DM_DS_EX -> DM_DS_EX_nodupe [label="proc sort\nnodupkey\n634 obs"];
+        DM_DS_EX_nodupe [label="DM_DS_EX\n(deduplicated)"];
+        DM_DS_EX_nodupe -> BY_DSDECOD_EX1 [label="proc summary\n8 obs"];
+        DM_DS_EX_nodupe -> BY_DSDECOD_DAY_EX1 [label="proc summary\nby day\n14 obs"];
+        BY_DSDECOD_EX1 [label="BY_DSDECOD"];
+        BY_DSDECOD_DAY_EX1 [label="BY_DSDECOD_DAY"];
+        BY_DSDECOD_DAY_EX1 -> BY_DSDECOD_DAY1_EX [label="expand\n159 obs"];
+        BY_DSDECOD_DAY1_EX [label="BY_DSDECOD_DAY1"];
+        BY_DSDECOD_DAY1_EX -> BY_DS_EX [label="merge"];
+        BY_DSDECOD_EX1 -> BY_DS_EX;
+        BY_DS_EX [label="BY_DS\n159 obs"];
+        BY_DS_EX -> BY_DS2_EX [label="merge with\nARM + DSD_NUM"];
+        BY_DS2_EX [label="BY_DS2"];
+        BY_DS2_EX -> BY_DS2_ONE_EX [label="transpose\n124 obs"];
+        BY_DS2_ONE_EX [label="BY_DS2_ONE"];
+        BY_DS2_ONE_EX -> DSDECOD1E [label="subset\n31 obs"];
+        BY_DS2_ONE_EX -> DSDECOD2E [label="subset\n31 obs"];
+        BY_DS2_ONE_EX -> DSDECOD3E [label="subset\n31 obs"];
+        BY_DS2_ONE_EX -> DSDECOD4E [label="subset\n31 obs"];
+    }
+    
+    DSDECOD1E [label="DSDECOD1E\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD2E [label="DSDECOD2E\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD3E [label="DSDECOD3E\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    DSDECOD4E [label="DSDECOD4E\n(Chart data)", fillcolor=pink, shape=doubleoctagon];
+    
+    // Output to Excel
+    subgraph cluster_output {
+        label="Excel Output";
+        style=filled;
+        fillcolor=gold;
+        
+        EXCEL [label="Excel File:\nDisposition.xls", shape=folder, fillcolor=yellow];
+        
+        FINAL_DISPOSITIONA -> EXCEL [label="sheet:\nDispositionANew"];
+        FINAL_DISPOSITIONB -> EXCEL [label="sheet:\nDispositionBNew"];
+        DSDECOD1 -> EXCEL [label="sheet: Sheet1"];
+        DSDECOD2 -> EXCEL [label="sheet: Sheet2"];
+        DSDECOD3 -> EXCEL [label="sheet: Sheet3"];
+        DSDECOD4 -> EXCEL [label="sheet: Sheet4"];
+        DSDECOD1E -> EXCEL [label="sheet: Sheet1E"];
+        DSDECOD2E -> EXCEL [label="sheet: Sheet2E"];
+        DSDECOD3E -> EXCEL [label="sheet: Sheet3E"];
+        DSDECOD4E -> EXCEL [label="sheet: Sheet4E"];
+    }
+    
+    // Legend
+    subgraph cluster_legend {
+        label="Legend";
+        style=filled;
+        fillcolor=white;
+        
+        legend_input [label="Input Dataset", fillcolor=lightblue];
+        legend_transform [label="Transformed Dataset", fillcolor=lightyellow];
+        legend_intermediate [label="Intermediate Dataset", fillcolor=lightgreen];
+        legend_merged [label="Merged Dataset", fillcolor=orange];
+        legend_output [label="Output Dataset", fillcolor=pink, shape=doubleoctagon];
+        
+        legend_input -> legend_transform [style=invis];
+        legend_transform -> legend_intermediate [style=invis];
+        legend_intermediate -> legend_merged [style=invis];
+        legend_merged -> legend_output [style=invis];
+    }
+}
